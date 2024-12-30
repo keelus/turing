@@ -1,7 +1,7 @@
 use super::{parser, tape::Tape};
 use std::{collections::HashMap, fs};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum HeadMovement {
     Left,
     Right,
@@ -47,6 +47,18 @@ pub struct TuringMachine {
     pub halted: bool,
 }
 
+#[derive(Debug)]
+pub enum TapeSide {
+    Left,
+    Right,
+}
+
+pub struct TickResult {
+    pub written_different_symbol: bool,
+    pub extended_tape_on_side: Option<TapeSide>,
+    pub head_movement: HeadMovement,
+}
+
 impl TuringMachine {
     pub fn new_from_file(filename: &str, tape_data: &str) -> Result<TuringMachine, String> {
         let file_data = fs::read_to_string(filename)
@@ -59,9 +71,13 @@ impl TuringMachine {
         Ok(machine)
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&mut self) -> TickResult {
         if self.halted {
-            return;
+            return TickResult {
+                written_different_symbol: false,
+                extended_tape_on_side: None,
+                head_movement: HeadMovement::Stay,
+            };
         }
 
         let available_transitions = &self.states[&self.current_state].transitions;
@@ -91,25 +107,41 @@ impl TuringMachine {
             self.tape.write(self.head_idx, new_symbol);
             self.current_state = transition.new_state.clone();
 
-            match transition.head_movement {
+            let extended_tape_on_side = match transition.head_movement {
                 HeadMovement::Right => {
                     self.head_idx += 1;
                     if self.head_idx == self.tape.len() {
                         self.tape.extend_right();
+                        Some(TapeSide::Right)
+                    } else {
+                        None
                     }
                 }
                 HeadMovement::Left => {
                     if self.head_idx == 0 {
-                        self.tape.extend_left()
+                        self.tape.extend_left();
+                        Some(TapeSide::Left)
                     } else {
-                        self.head_idx -= 1
+                        self.head_idx -= 1;
+                        None
                     }
                 }
-                HeadMovement::Stay => (),
-            }
+                HeadMovement::Stay => None,
+            };
+
+            return TickResult {
+                written_different_symbol: new_symbol != *current_symbol,
+                extended_tape_on_side,
+                head_movement: transition.head_movement,
+            };
         } else {
             println!("No transition available.");
             self.halted = true;
+            return TickResult {
+                written_different_symbol: false,
+                extended_tape_on_side: None,
+                head_movement: HeadMovement::Stay,
+            };
             // Check for default behaviour. Else, halt.
             // println!("TODO")
         }

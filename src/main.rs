@@ -14,10 +14,10 @@ use ggez::graphics::TextFragment;
 use ggez::graphics::{self, Color};
 use ggez::{Context, GameResult};
 use turing_lib::machine::Symbol;
+use turing_lib::machine::TapeSide;
+use turing_lib::machine::TickResult;
 use turing_lib::machine::TuringMachine;
 use turing_lib::tape::Tape;
-
-const TARGET_UPDATES_PER_SECOND: usize = 1;
 
 const WINDOW_WIDTH: f32 = 1000.0;
 const WINDOW_HEIGHT: f32 = 800.0;
@@ -26,8 +26,9 @@ const HORIZ_MARGIN: f32 = 80.0;
 const CELL_COUNT: f32 = 7.0;
 const CELL_SIZE: f32 = (WINDOW_WIDTH - HORIZ_MARGIN * 2.0) / CELL_COUNT;
 
-const HEAD_TRIANGLE_WIDTH: f32 = 40.0;
-const HEAD_TRIANGLE_HEIGHT: f32 = 50.0;
+const HEAD_TRIANGLE_WIDTH: f32 = CELL_SIZE / 3.0;
+const HEAD_TRIANGLE_HEIGHT: f32 = CELL_SIZE / 2.4;
+const HEAD_TRIANGLE_MARGIN: f32 = CELL_SIZE / 8.0;
 
 const WRITE_ANIM_MAX_ALPHA: f32 = 0.8;
 
@@ -39,49 +40,50 @@ struct AnimationState {
 
 enum Animation {
     FirstWait,
-    HeadMove,
+    HeadMove {
+        delta: f32, // -1, 0 or 1, depending on where the head is moving (0 if not).
+        current_text_displacement: f32, // 0.0 to 1.0 percent on the current text displacement.
+    },
     LastWait,
 }
 
 struct MainState {
     turing_machine: TuringMachine,
-    last_update: Option<Instant>,
 
-    doing_write_anim: bool,
-    written_cell_opacity: f32,
-
-    current_updated: bool,
+    writing_animation: Option<f32>, // Where f32 is the alpha value [0.0, WRITE_ANIM_MAX_ALPHA]
 
     visual_tape: Tape,
-    head_idx: usize,
+    visual_head_idx: usize,
 
+    should_update: bool,
     animation_state: Option<AnimationState>,
-    text_displacement_percent: f32,
-    anim_delta: f32, // -1 -> To the left, 0 -> Stay, 1 -> To the right
+    // text_displacement_percent: f32,
+    // anim_delta: f32, // -1 -> To the left, 0 -> Stay, 1 -> To the right
+    last_tick: Option<TickResult>,
 }
 
 impl MainState {
     fn new() -> GameResult<MainState> {
         let mut s = MainState {
-            turing_machine: TuringMachine::new_from_file("main.tng", "1111").unwrap(),
-            last_update: None,
+            turing_machine: TuringMachine::new_from_file("main.tng", "1010").unwrap(),
 
-            written_cell_opacity: 0.0,
-            doing_write_anim: false,
+            writing_animation: None,
+
+            last_tick: None,
 
             visual_tape: Tape::new(vec![]),
-            current_updated: true,
-            head_idx: 0,
+            visual_head_idx: 0,
             animation_state: Some(AnimationState {
                 animation: Animation::LastWait,
                 stage_begin: Instant::now(),
                 next_stage: Instant::now() + Duration::from_millis(LAST_WAIT_DURATION_MS),
             }),
-            text_displacement_percent: 0.0,
-            anim_delta: 0.0,
+            should_update: true,
+            // text_displacement_percent: 0.0,
+            // anim_delta: 0.0,
         };
 
-        s.head_idx = s.turing_machine.head_idx;
+        s.visual_head_idx = s.turing_machine.head_idx;
         s.visual_tape = Tape::new(s.turing_machine.tape.0.clone());
 
         Ok(s)
@@ -94,38 +96,43 @@ const LAST_WAIT_DURATION_MS: u64 = 300;
 
 impl event::EventHandler<ggez::GameError> for MainState {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
-        let bg_color = graphics::Color::from([0.1, 0.1, 0.1, 1.0]);
+        if self.turing_machine.halted {
+            return Ok(());
+        }
 
-        // Update animation
-        // let fps = timer::fps(ctx);
-        // let animation_step = 4.0 / fps;
-        let mut should_update = false;
         if let Some(ref mut animation_state) = self.animation_state {
             if Instant::now() >= animation_state.next_stage {
-                // Transition to next animation
                 let (new_animation, animation_duration) = match animation_state.animation {
                     Animation::FirstWait => {
-                        self.written_cell_opacity = 0.0;
-                        self.doing_write_anim = false;
+                        self.writing_animation = None;
+
+                        let anim_delta = if let Some(last_tick) = &self.last_tick {
+                            if let Some(TapeSide::Left) = last_tick.extended_tape_on_side {
+                                -1.0
+                            } else {
+                                self.turing_machine.head_idx as f32 - self.visual_head_idx as f32
+                            }
+                        } else {
+                            0.0
+                        };
                         (
-                            Animation::HeadMove,
+                            Animation::HeadMove {
+                                delta: anim_delta,
+                                current_text_displacement: 0.0,
+                            },
                             Duration::from_millis(HEAD_MOVE_DURATION_MS),
                         )
                     }
-                    Animation::HeadMove => {
-                        self.text_displacement_percent = 0.0;
-                        self.head_idx = self.turing_machine.head_idx;
-                        should_update = true;
+                    Animation::HeadMove { .. } => {
+                        self.visual_head_idx = self.turing_machine.head_idx;
+                        self.should_update = true;
                         (
                             Animation::LastWait,
                             Duration::from_millis(LAST_WAIT_DURATION_MS),
                         )
                     }
                     Animation::LastWait => {
-                        self.text_displacement_percent = 0.0;
-                        // self.written_cell_opacity = 0.0;
                         self.visual_tape = Tape::new(self.turing_machine.tape.0.clone());
-                        // self.current_updated = false;
                         (
                             Animation::FirstWait,
                             Duration::from_millis(FIRST_WAIT_DURATION_MS),
@@ -139,101 +146,66 @@ impl event::EventHandler<ggez::GameError> for MainState {
                     next_stage: Instant::now() + animation_duration,
                 };
             }
-        } else {
-            should_update = true;
         }
 
-        if let Some(animation_state) = &self.animation_state {
-            if let Animation::HeadMove = animation_state.animation {
-                let total_duration = animation_state.next_stage - animation_state.stage_begin;
-                let duration_since_begin = Instant::now() - animation_state.stage_begin;
+        if let Some(ref mut animation_state) = &mut self.animation_state {
+            let total_duration = animation_state.next_stage - animation_state.stage_begin;
+            let duration_since_begin = Instant::now() - animation_state.stage_begin;
 
-                let percent = duration_since_begin.as_millis() * 100 / total_duration.as_millis();
-                self.text_displacement_percent = self.anim_delta * percent as f32 / 100.0;
-            } else if let Animation::LastWait = animation_state.animation {
-                if self.doing_write_anim {
-                    let total_duration = animation_state.next_stage - animation_state.stage_begin;
-                    let duration_since_begin = Instant::now() - animation_state.stage_begin;
+            let percent = duration_since_begin.as_millis() * 100 / total_duration.as_millis();
 
-                    let percent =
-                        duration_since_begin.as_millis() * 100 / total_duration.as_millis() * 2;
-                    let percent = percent.min(100);
+            if let Animation::HeadMove {
+                delta,
+                ref mut current_text_displacement,
+            } = &mut animation_state.animation
+            {
+                *current_text_displacement = *delta * percent as f32 / 100.0;
+            } else if let Some(ref mut alpha) = self.writing_animation {
+                let percent = (percent * 2).min(100); // Speed up opacity transition by 2
 
-                    let alpha = percent as f32 * WRITE_ANIM_MAX_ALPHA / 100.0;
-                    self.written_cell_opacity = alpha;
-                }
-            } else {
-                if self.doing_write_anim {
-                    let total_duration = animation_state.next_stage - animation_state.stage_begin;
-                    let duration_since_begin = Instant::now() - animation_state.stage_begin;
+                let new_alpha = percent as f32 * WRITE_ANIM_MAX_ALPHA / 100.0;
 
-                    let percent =
-                        duration_since_begin.as_millis() * 100 / total_duration.as_millis() * 2;
-                    let percent = percent.min(100);
-
-                    let alpha = percent as f32 * WRITE_ANIM_MAX_ALPHA / 100.0;
-                    self.written_cell_opacity = 1.0 - alpha;
+                if let Animation::LastWait = animation_state.animation {
+                    *alpha = new_alpha;
+                } else {
+                    *alpha = 1.0 - new_alpha;
                 }
             }
         }
 
         // Update machine
-        if !should_update || self.turing_machine.halted {
+        if !self.should_update {
             return Ok(());
         }
-        if let Some(last_update) = self.last_update {
-            let target_duration_millis = 1000 / TARGET_UPDATES_PER_SECOND as u128;
-            if Instant::now().duration_since(last_update).as_millis() < target_duration_millis {
-                return Ok(());
-            }
+
+        let mut prev_tape_content = self.turing_machine.tape.0.clone();
+        let tick_result = self.turing_machine.tick();
+
+        if let Some(TapeSide::Left) = tick_result.extended_tape_on_side {
+            self.visual_head_idx += 1;
+            prev_tape_content.insert(0, Symbol::Blank);
+            self.visual_tape = Tape::new(prev_tape_content);
         }
 
-        self.last_update = Some(Instant::now());
-        self.head_idx = self.turing_machine.head_idx;
-
-        let len_before = self.turing_machine.tape.len();
-        let tape_before = self.turing_machine.tape.0.clone();
-        println!("Tick");
-        print!("\"{}\"", self.turing_machine.tape);
-        self.turing_machine.tick();
-        let tape_after = self.turing_machine.tape.0.clone();
-        self.anim_delta =
-            if self.turing_machine.tape.len() > len_before && self.turing_machine.head_idx == 0 {
-                // Tape extended to the left
-                self.head_idx += 1;
-                -1.0
-            } else {
-                self.turing_machine.head_idx as f32 - self.head_idx as f32
-            };
-
-        println!(" vs \"{}\"", self.turing_machine.tape);
-
-        // Tape updated only is true when the tape is different and it isn't because
-        // of extending the tape in the left or right.
-        // TODO: Fix writing and extending
-        let tape_updated = tape_before != tape_after
-            && !((self.turing_machine.tape.len() > len_before
-                && self.turing_machine.head_idx == 0)
-                || (self.turing_machine.tape.len() > len_before
-                    && self.turing_machine.head_idx == self.turing_machine.tape.len() - 1));
-
-        if tape_updated {
-            println!("Tape updated!");
-            self.doing_write_anim = true;
+        if tick_result.written_different_symbol {
+            self.writing_animation = Some(0.0);
         } else {
-            self.written_cell_opacity = 0.0;
-            self.doing_write_anim = false;
+            self.writing_animation = None;
         }
+        self.should_update = false;
+        self.last_tick = Some(tick_result);
 
         Ok(())
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         let bg_color = graphics::Color::from([0.1, 0.1, 0.1, 1.0]);
-        let head_color = graphics::Color::from([1.0, 0.0, 0.0, 1.0]);
+        let head_color = Color::RED;
         let mut canvas = graphics::Canvas::from_frame(ctx, bg_color);
 
-        let stroke_width = 2.0;
+        let stroke_width = (CELL_SIZE / 2.0 * 0.03).ceil().max(1.0);
+        let head_stroke_width = (CELL_SIZE / 2.0 * 0.07).ceil().max(1.0);
+
         let horiz_line = graphics::Mesh::new_line(
             ctx,
             &[
@@ -249,6 +221,17 @@ impl event::EventHandler<ggez::GameError> for MainState {
         canvas.draw(&horiz_line, [0.0, WINDOW_HEIGHT / 2.0 - CELL_SIZE / 2.0]);
         canvas.draw(&horiz_line, [0.0, WINDOW_HEIGHT / 2.0 + CELL_SIZE / 2.0]);
 
+        let mut text_displacement_percent = 0.0;
+        if let Some(animation_state) = &self.animation_state {
+            if let Animation::HeadMove {
+                current_text_displacement,
+                ..
+            } = animation_state.animation
+            {
+                text_displacement_percent = current_text_displacement;
+            }
+        }
+
         let vert_line = graphics::Mesh::new_line(
             ctx,
             &[[0.0, 0.0], [0.0, CELL_SIZE]],
@@ -259,8 +242,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
             canvas.draw(
                 &vert_line,
                 [
-                    HORIZ_MARGIN + CELL_SIZE * (i as f32)
-                        - CELL_SIZE * self.text_displacement_percent,
+                    HORIZ_MARGIN + CELL_SIZE * (i as f32) - CELL_SIZE * text_displacement_percent,
                     WINDOW_HEIGHT / 2.0 - CELL_SIZE / 2.0,
                 ],
             );
@@ -280,17 +262,14 @@ impl event::EventHandler<ggez::GameError> for MainState {
             &head_triangle,
             [
                 WINDOW_WIDTH / 2.0 - HEAD_TRIANGLE_WIDTH / 2.0,
-                WINDOW_HEIGHT / 2.0 + CELL_SIZE / 2.0 + 20.0,
+                WINDOW_HEIGHT / 2.0 + CELL_SIZE / 2.0 + HEAD_TRIANGLE_MARGIN,
             ],
         );
 
         // + 1 to also draw non visible border cells
         for i in -(CELL_COUNT as isize / 2 + 1)..=(CELL_COUNT as isize / 2 + 1) {
             let text_fragment = {
-                // let diff = self.turing_machine.head_idx - self.head_idx;
-                // println!("Diff: {diff}");
-                // let correct_index = self.head_idx as isize + i + diff as isize;
-                let correct_index = self.head_idx as isize + i;
+                let correct_index = self.visual_head_idx as isize + i;
 
                 let char_at = {
                     if correct_index < 0 || correct_index >= self.visual_tape.len() as isize {
@@ -326,31 +305,28 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 [
                     (CELL_SIZE * (i as f32) + WINDOW_WIDTH / 2.0)
                         - text_width / 2.0
-                        - CELL_SIZE * self.text_displacement_percent,
+                        - CELL_SIZE * text_displacement_percent,
                     WINDOW_HEIGHT / 2.0 - text_height / 2.0,
                 ],
             );
 
             if i == 0 {
-                let write_opacity_square = graphics::Mesh::new_rectangle(
-                    ctx,
-                    graphics::DrawMode::Fill(FillOptions::default()),
-                    Rect::new(0.0, 0.0, CELL_SIZE, CELL_SIZE),
-                    Color::new(
-                        bg_color.r,
-                        bg_color.b,
-                        bg_color.g,
-                        self.written_cell_opacity,
-                    ),
-                )?;
+                if let Some(alpha) = self.writing_animation {
+                    let write_opacity_square = graphics::Mesh::new_rectangle(
+                        ctx,
+                        graphics::DrawMode::Fill(FillOptions::default()),
+                        Rect::new(0.0, 0.0, CELL_SIZE, CELL_SIZE),
+                        Color::new(bg_color.r, bg_color.b, bg_color.g, alpha),
+                    )?;
 
-                canvas.draw(
-                    &write_opacity_square,
-                    [
-                        (CELL_SIZE * (i as f32) + WINDOW_WIDTH / 2.0) - CELL_SIZE / 2.0,
-                        WINDOW_HEIGHT / 2.0 - CELL_SIZE / 2.0,
-                    ],
-                );
+                    canvas.draw(
+                        &write_opacity_square,
+                        [
+                            (CELL_SIZE * (i as f32) + WINDOW_WIDTH / 2.0) - CELL_SIZE / 2.0,
+                            WINDOW_HEIGHT / 2.0 - CELL_SIZE / 2.0,
+                        ],
+                    );
+                }
             }
         }
 
@@ -358,27 +334,24 @@ impl event::EventHandler<ggez::GameError> for MainState {
         let square = graphics::Mesh::new_rectangle(
             ctx,
             graphics::DrawMode::Fill(FillOptions::default()),
-            Rect::new(0.0, 0.0, CELL_SIZE, CELL_SIZE + 10.0),
+            Rect::new(0.0, 0.0, HORIZ_MARGIN, CELL_SIZE + 10.0),
             bg_color,
         )?;
         canvas.draw(
             &square,
-            [
-                (HORIZ_MARGIN - CELL_SIZE),
-                WINDOW_HEIGHT / 2.0 - (CELL_SIZE + 10.0) / 2.0,
-            ],
+            [0.0, WINDOW_HEIGHT / 2.0 - (CELL_SIZE + 10.0) / 2.0],
         );
         canvas.draw(
             &square,
             [
-                WINDOW_WIDTH - (HORIZ_MARGIN - CELL_SIZE) - CELL_SIZE,
+                WINDOW_WIDTH - HORIZ_MARGIN,
                 WINDOW_HEIGHT / 2.0 - (CELL_SIZE + 10.0) / 2.0,
             ],
         );
 
         let head_square = graphics::Mesh::new_rectangle(
             ctx,
-            graphics::DrawMode::Stroke(StrokeOptions::default().with_line_width(4.0)),
+            graphics::DrawMode::Stroke(StrokeOptions::default().with_line_width(head_stroke_width)),
             Rect::new(0.0, 0.0, CELL_SIZE, CELL_SIZE),
             head_color,
         )?;

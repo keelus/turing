@@ -1,0 +1,12 @@
+config {
+	name: "Negation machine"
+	blank_symbol: '_'
+	head_start: 0
+}
+
+states {
+	state q0 is initial and final {
+		1,0,R,q0
+		0,1,R,q0
+	}
+}

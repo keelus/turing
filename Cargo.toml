@@ -1,0 +1,10 @@
+[package]
+name = "turing"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+ggez = "0.9.3"
+turing_lib = { path = "turing_lib" }

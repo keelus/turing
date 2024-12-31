@@ -73,7 +73,7 @@ impl MainState {
     fn new() -> GameResult<MainState> {
         let mut s = MainState {
             // turing_machine: TuringMachine::new_from_file("main.tng", "1010").unwrap(),
-            turing_machine: TuringMachine::new_from_file("main.tng", "aaaabbb").unwrap(),
+            turing_machine: TuringMachine::new_from_file("main.tng", "aaabbb").unwrap(),
 
             writing_animation: None,
 
@@ -390,27 +390,20 @@ impl event::EventHandler<ggez::GameError> for MainState {
             };
 
             self.animation_state = None;
-            //self.animation_percent = 0.0;
             let horiz_text_margin = 20.0;
-            let vert_text_margin = 50.0;
-            let text_fragment = {
-                let text_size = 30.0;
+            let vert_text_margin = 20.0;
 
-                let mut text_fragment = TextFragment::default();
-                text_fragment.text = text_content.to_string();
-                text_fragment.color = Some(text_color);
-                text_fragment.scale(PxScale {
+            let text_size = 30.0;
+            let text_piece = graphics::Text::new(TextFragment {
+                text: text_content.to_string(),
+                color: Some(text_color),
+                scale: Some(PxScale {
                     x: text_size,
                     y: text_size,
-                })
-            };
-            let text_piece = graphics::Text::new(text_fragment);
-            let Rect {
-                w: text_width,
-                h: _text_height,
-                ..
-            } = text_piece.dimensions(ctx).unwrap();
-
+                }),
+                font: None,
+            });
+            let Rect { w: text_width, .. } = text_piece.dimensions(ctx).unwrap();
             canvas.draw(
                 &text_piece,
                 [

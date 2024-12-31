@@ -1,5 +1,8 @@
 use super::{parser, tape::Tape};
-use std::{collections::HashMap, fs};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum HeadMovement {
@@ -39,6 +42,7 @@ pub struct TuringMachine {
     pub blank_symbol: char,
 
     pub states: HashMap<String, State>,
+    pub final_states: HashSet<String>,
 
     pub head_idx: usize,
     pub current_state: String,
@@ -146,112 +150,8 @@ impl TuringMachine {
             // println!("TODO")
         }
     }
-}
 
-pub fn create_turing_machine() -> TuringMachine {
-    let mut states = HashMap::new();
-    states.insert("q0".to_string(), {
-        let mut state_q0 = State {
-            name: "q0".to_string(),
-            transitions: HashMap::new(),
-        };
-
-        state_q0.transitions.insert(
-            TransitionSource::Mark('0'),
-            Transition {
-                head_movement: HeadMovement::Left,
-                new_symbol: Symbol::Mark('0'),
-                new_state: "q0".to_string(),
-            },
-        );
-        state_q0.transitions.insert(
-            TransitionSource::Mark('1'),
-            Transition {
-                head_movement: HeadMovement::Left,
-                new_symbol: Symbol::Mark('1'),
-                new_state: "q0".to_string(),
-            },
-        );
-        state_q0.transitions.insert(
-            TransitionSource::Blank,
-            Transition {
-                head_movement: HeadMovement::Left,
-                new_symbol: Symbol::Blank,
-                new_state: "q0".to_string(),
-            },
-        );
-
-        state_q0
-    });
-
-    TuringMachine {
-        name: "A basic turing machine".to_string(),
-        blank_symbol: '_',
-
-        states,
-        current_state: "q0".to_string(),
-
-        head_idx: 5,
-        tape: Tape::new(vec![
-            Symbol::Blank,
-            Symbol::Mark('1'),
-            Symbol::Mark('1'),
-            Symbol::Mark('0'),
-            Symbol::Mark('1'),
-            Symbol::Mark('0'),
-            Symbol::Mark('0'),
-            Symbol::Mark('0'),
-            Symbol::Mark('1'),
-            Symbol::Mark('1'),
-            Symbol::Blank,
-        ]),
-
-        halted: false,
-    }
-}
-
-pub fn create_turing_machine_2() -> TuringMachine {
-    let mut states = HashMap::new();
-    states.insert("q0".to_string(), {
-        let mut state_q0 = State {
-            name: "q0".to_string(),
-            transitions: HashMap::new(),
-        };
-
-        state_q0.transitions.insert(
-            TransitionSource::Default,
-            Transition {
-                head_movement: HeadMovement::Left,
-                new_symbol: Symbol::Default,
-                new_state: "q0".to_string(),
-            },
-        );
-
-        state_q0
-    });
-
-    TuringMachine {
-        name: "A basic turing machine".to_string(),
-        blank_symbol: '_',
-
-        states,
-        current_state: "q0".to_string(),
-
-        head_idx: 5,
-        tape: Tape::new(vec![
-            Symbol::Blank,
-            Symbol::Mark('1'),
-            Symbol::Mark('1'),
-            Symbol::Mark('0'),
-            Symbol::Mark('1'),
-            Symbol::Mark('0'),
-            Symbol::Mark('0'),
-            Symbol::Mark('0'),
-            Symbol::Mark('1'),
-            Symbol::Mark('1'),
-            Symbol::Blank,
-        ]),
-
-        halted: false,
+    pub fn is_accepting(&self) -> bool {
+        self.halted && self.final_states.contains(&self.current_state)
     }
 }

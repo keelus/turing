@@ -16,13 +16,15 @@ struct Config {
 impl Parser {
     pub fn parse_file(file_data: &str, tape: Tape) -> Result<TuringMachine, String> {
         let config: Config = Self::parse_config(file_data)?;
-        let (states, starting_state) = Self::parse_states(file_data, config.blank_symbol)?;
+        let (states, final_states, starting_state) =
+            Self::parse_states(file_data, config.blank_symbol)?;
 
         Ok(TuringMachine {
             name: config.name,
             blank_symbol: config.blank_symbol,
 
             states,
+            final_states,
 
             head_idx: config.head_start,
             current_state: starting_state,
@@ -101,7 +103,7 @@ impl Parser {
     fn parse_states(
         file_data: &str,
         blank_symbol: char,
-    ) -> Result<(HashMap<String, State>, String), String> {
+    ) -> Result<(HashMap<String, State>, HashSet<String>, String), String> {
         struct ParsingState<'ps> {
             is_initial: bool,
             is_final: bool,
@@ -135,7 +137,7 @@ impl Parser {
                         }
 
                         if state.is_final {
-                            final_states.insert(state.name);
+                            final_states.insert(state.name.to_string());
                         }
 
                         states.insert(
@@ -278,6 +280,7 @@ impl Parser {
 
         Ok((
             states,
+            final_states,
             initial_state_name
                 .expect("No initial state was provided.")
                 .to_string(),

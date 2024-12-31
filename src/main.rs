@@ -83,8 +83,8 @@ impl MainState {
             // anim_delta: 0.0,
         };
 
-        s.visual_head_idx = s.turing_machine.head_idx;
-        s.visual_tape = Tape::new(s.turing_machine.tape.0.clone());
+        s.visual_head_idx = s.turing_machine.head_idx();
+        s.visual_tape = s.turing_machine.tape().clone();
 
         Ok(s)
     }
@@ -96,7 +96,7 @@ const LAST_WAIT_DURATION_MS: u64 = 300;
 
 impl event::EventHandler<ggez::GameError> for MainState {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
-        if self.turing_machine.halted {
+        if self.turing_machine.is_halted() {
             return Ok(());
         }
 
@@ -110,7 +110,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
                             if let Some(TapeSide::Left) = last_tick.extended_tape_on_side {
                                 -1.0
                             } else {
-                                self.turing_machine.head_idx as f32 - self.visual_head_idx as f32
+                                self.turing_machine.head_idx() as f32 - self.visual_head_idx as f32
                             }
                         } else {
                             0.0
@@ -124,7 +124,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
                         )
                     }
                     Animation::HeadMove { .. } => {
-                        self.visual_head_idx = self.turing_machine.head_idx;
+                        self.visual_head_idx = self.turing_machine.head_idx();
                         self.should_update = true;
                         (
                             Animation::LastWait,
@@ -132,7 +132,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
                         )
                     }
                     Animation::LastWait => {
-                        self.visual_tape = Tape::new(self.turing_machine.tape.0.clone());
+                        self.visual_tape = self.turing_machine.tape().clone();
                         (
                             Animation::FirstWait,
                             Duration::from_millis(FIRST_WAIT_DURATION_MS),
@@ -178,7 +178,8 @@ impl event::EventHandler<ggez::GameError> for MainState {
             return Ok(());
         }
 
-        let mut prev_tape_content = self.turing_machine.tape.0.clone();
+        let mut prev_tape_content = self.turing_machine.tape().get_content().to_vec();
+        // let mut prev_tape_content = self.turing_machine.tape().0.clone();
         let tick_result = self.turing_machine.tick();
 
         if let Some(TapeSide::Left) = tick_result.extended_tape_on_side {
@@ -273,10 +274,10 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
                 let char_at = {
                     if correct_index < 0 || correct_index >= self.visual_tape.len() as isize {
-                        self.turing_machine.blank_symbol
+                        self.turing_machine.blank_symbol()
                     } else {
                         match self.visual_tape.read(correct_index as usize) {
-                            Symbol::Blank => self.turing_machine.blank_symbol,
+                            Symbol::Blank => self.turing_machine.blank_symbol(),
                             Symbol::Mark(c) => c,
                             _ => unreachable!("Default Symbol won't be present in the tape."),
                         }
@@ -363,7 +364,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
             ],
         );
 
-        if self.turing_machine.halted {
+        if self.turing_machine.is_halted() {
             let (text_content, text_color) = if self.turing_machine.is_accepting() {
                 ("Halted, accepts", Color::GREEN)
             } else {
@@ -404,8 +405,10 @@ impl event::EventHandler<ggez::GameError> for MainState {
         {
             let text_margins = 20.0;
             let text_fragment = {
-                let text_content =
-                    format!("Current state: \"{}\"", self.turing_machine.current_state);
+                let text_content = format!(
+                    "Current state: \"{}\"",
+                    self.turing_machine.current_state_name()
+                );
                 let text_size = 20.0;
 
                 let mut text_fragment = TextFragment::default();

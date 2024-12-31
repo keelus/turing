@@ -364,17 +364,22 @@ impl event::EventHandler<ggez::GameError> for MainState {
         );
 
         if self.turing_machine.halted {
+            let (text_content, text_color) = if self.turing_machine.is_accepting() {
+                ("Halted, accepts", Color::GREEN)
+            } else {
+                ("Halted, rejects", Color::RED)
+            };
+
             self.animation_state = None;
             //self.animation_percent = 0.0;
             let horiz_text_margin = 20.0;
             let vert_text_margin = 50.0;
             let text_fragment = {
-                let text_content = "Halted";
                 let text_size = 30.0;
 
                 let mut text_fragment = TextFragment::default();
                 text_fragment.text = text_content.to_string();
-                text_fragment.color = Some(Color::RED);
+                text_fragment.color = Some(text_color);
                 text_fragment.scale(PxScale {
                     x: text_size,
                     y: text_size,

@@ -5,7 +5,6 @@ use ggez::{
 };
 
 pub struct Slider {
-    position: Point2<f32>,
     rect: Rect,
 
     handle_radius: f32,
@@ -15,9 +14,8 @@ pub struct Slider {
 }
 
 impl Slider {
-    pub fn new(position: Point2<f32>, rect: Rect, handle_radius: f32, initial_value: f32) -> Self {
+    pub fn new(rect: Rect, handle_radius: f32, initial_value: f32) -> Self {
         Self {
-            position,
             rect,
             handle_radius,
             value: initial_value,
@@ -29,22 +27,24 @@ impl Slider {
         let slider_rectangle = graphics::Mesh::new_rectangle(
             ctx,
             graphics::DrawMode::Fill(FillOptions::default()),
-            Rect::new(0.0, 0.0, self.rect.w, self.rect.h),
+            self.rect,
             Color::new(0.3, 0.3, 0.3, 1.0),
         )?;
-        canvas.draw(&slider_rectangle, [self.position.x, self.position.y]);
+        canvas.draw(&slider_rectangle, [0.0, 0.0]);
 
         // Speed progress
         let slider_progress_rectangle = graphics::Mesh::new_rectangle(
             ctx,
             graphics::DrawMode::Fill(FillOptions::default()),
-            Rect::new(0.0, 0.0, self.rect.w * self.value, self.rect.h),
+            Rect::new(
+                self.rect.x,
+                self.rect.y,
+                self.rect.w * self.value,
+                self.rect.h,
+            ),
             Color::new(0.8, 0.0, 0.0, 1.0),
         )?;
-        canvas.draw(
-            &slider_progress_rectangle,
-            [self.position.x, self.position.y],
-        );
+        canvas.draw(&slider_progress_rectangle, [0.0, 0.0]);
 
         // Speed progress handle
         let slider_progress_handle = graphics::Mesh::new_circle(
@@ -53,11 +53,11 @@ impl Slider {
             [0.0, 0.0],
             self.handle_radius,
             1.0,
-            Color::new(0.5, 0.0, 0.0, 1.0),
+            Color::new(1.0, 1.0, 1.0, 1.0),
         )?;
         let (handle_x, handle_y) = (
-            self.position.x + self.rect.w * self.value,
-            self.position.y + self.handle_radius / 2.0,
+            self.rect.x + self.rect.w * self.value,
+            self.rect.y + self.handle_radius / 2.0,
         );
         canvas.draw(&slider_progress_handle, [handle_x, handle_y]);
 
@@ -80,8 +80,8 @@ impl Slider {
             canvas.draw(
                 &text_piece,
                 [
-                    self.position.x + self.rect.w + 15.0,
-                    self.position.y + self.rect.h / 2.0 - text_height / 2.0,
+                    self.rect.x + self.rect.w + 15.0,
+                    self.rect.y + self.rect.h / 2.0 - text_height / 2.0,
                 ],
             );
         }
@@ -94,8 +94,8 @@ impl Slider {
     }
 
     pub fn is_mouse_over_handle(&self, x: f32, y: f32) -> bool {
-        (self.position.x + self.rect.w * self.value - x).abs() <= self.handle_radius
-            && (self.position.y + self.rect.h / 2.0 - y).abs() <= self.handle_radius
+        (self.rect.x + self.rect.w * self.value - x).abs() <= self.handle_radius
+            && (self.rect.y + self.rect.h / 2.0 - y).abs() <= self.handle_radius
     }
 
     pub fn handle_mouse_move(&mut self, x: f32, _y: f32) {
@@ -103,7 +103,7 @@ impl Slider {
             return;
         }
 
-        let percent = (x - self.position.x) / self.rect.w;
+        let percent = (x - self.rect.x) / self.rect.w;
         let percent = percent.min(1.0).max(0.0);
         self.value = percent;
     }

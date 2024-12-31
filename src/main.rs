@@ -88,8 +88,7 @@ impl MainState {
             }),
             should_update: true,
             speed_slider: Slider::new(
-                Point2::from([10.0, WINDOW_HEIGHT - 30.0]),
-                Rect::new(0.0, 0.0, 200.0, 10.0),
+                Rect::new(20.0, WINDOW_HEIGHT - 30.0, 200.0, 10.0),
                 10.0,
                 0.5,
             ),
@@ -423,31 +422,35 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
         {
             let text_margins = 20.0;
-            let text_fragment = {
-                let text_content = format!(
-                    "Current state: \"{}\"",
-                    self.turing_machine.current_state_name()
-                );
-                let text_size = 20.0;
-
-                let mut text_fragment = TextFragment::default();
-                text_fragment.text = text_content.to_string();
-                text_fragment.scale(PxScale {
+            let text_size = 20.0;
+            let text_piece = graphics::Text::new(TextFragment {
+                text: format!("Running: \"{}\"", self.turing_machine.name()),
+                color: None,
+                scale: Some(PxScale {
                     x: text_size,
                     y: text_size,
-                })
-            };
-            let text_piece = graphics::Text::new(text_fragment);
-            let Rect {
-                w: text_width,
-                h: _text_height,
-                ..
-            } = text_piece.dimensions(ctx).unwrap();
+                }),
+                font: None,
+            });
+            canvas.draw(&text_piece, [text_margins, text_margins]);
+        }
 
-            canvas.draw(
-                &text_piece,
-                [WINDOW_WIDTH - text_margins - text_width, text_margins],
-            );
+        {
+            let text_margins = 20.0;
+            let text_size = 15.0;
+            let text_piece = graphics::Text::new(TextFragment {
+                text: format!(
+                    "Current state: \"{}\"",
+                    self.turing_machine.current_state_name()
+                ),
+                color: None,
+                scale: Some(PxScale {
+                    x: text_size,
+                    y: text_size,
+                }),
+                font: None,
+            });
+            canvas.draw(&text_piece, [text_margins, text_margins + 30.0]);
         }
 
         self.speed_slider.draw(ctx, &mut canvas).unwrap();

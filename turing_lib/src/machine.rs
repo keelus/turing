@@ -38,17 +38,17 @@ pub struct Transition {
 }
 
 pub struct TuringMachine {
-    pub name: String,
-    pub blank_symbol: char,
+    pub(crate) name: String,
+    pub(crate) blank_symbol: char,
 
-    pub states: HashMap<String, State>,
-    pub final_states: HashSet<String>,
+    pub(crate) states: HashMap<String, State>,
+    pub(crate) final_states: HashSet<String>,
 
-    pub head_idx: usize,
-    pub current_state: String,
-    pub tape: Tape,
+    pub(crate) head_idx: usize,
+    pub(crate) current_state: String,
+    pub(crate) tape: Tape,
 
-    pub halted: bool,
+    pub(crate) halted: bool,
 }
 
 #[derive(Debug)]
@@ -153,5 +153,29 @@ impl TuringMachine {
 
     pub fn is_accepting(&self) -> bool {
         self.halted && self.final_states.contains(&self.current_state)
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn blank_symbol(&self) -> char {
+        self.blank_symbol
+    }
+
+    pub fn head_idx(&self) -> usize {
+        self.head_idx
+    }
+
+    pub fn current_state_name(&self) -> &str {
+        &self.current_state
+    }
+
+    pub fn is_halted(&self) -> bool {
+        self.halted
+    }
+
+    pub fn tape(&self) -> &Tape {
+        &self.tape
     }
 }

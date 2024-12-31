@@ -2,8 +2,8 @@ use std::fmt::Display;
 
 use super::machine::Symbol;
 
-#[derive(Debug)]
-pub struct Tape(pub Vec<Symbol>);
+#[derive(Debug, Clone)]
+pub struct Tape(pub(crate) Vec<Symbol>);
 
 impl Display for Tape {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -59,5 +59,9 @@ impl Tape {
 
     pub fn extend_left(&mut self) {
         self.0.insert(0, Symbol::Blank);
+    }
+
+    pub fn get_content(&self) -> &[Symbol] {
+        &self.0
     }
 }

@@ -1,6 +1,7 @@
 # turing machine simulator and visualizer
 In very early development.
-![image](https://github.com/user-attachments/assets/0b7fc346-94af-4fe5-a459-566a6f94f7eb)
+
+https://github.com/user-attachments/assets/8ab87453-bffe-47ce-911b-fb206d3b8c02
 
 TODO
 

@@ -4,6 +4,7 @@ use std::time::Instant;
 
 use ggez::conf::WindowMode;
 use ggez::event;
+use ggez::event::MouseButton;
 use ggez::glam::*;
 use ggez::graphics::Drawable;
 use ggez::graphics::FillOptions;
@@ -12,12 +13,18 @@ use ggez::graphics::Rect;
 use ggez::graphics::StrokeOptions;
 use ggez::graphics::TextFragment;
 use ggez::graphics::{self, Color};
+use ggez::input::mouse::set_cursor_type;
+use ggez::input::mouse::CursorIcon;
+use ggez::mint::Point2;
 use ggez::{Context, GameResult};
+use slider::Slider;
 use turing_lib::machine::Symbol;
 use turing_lib::machine::TapeSide;
 use turing_lib::machine::TickResult;
 use turing_lib::machine::TuringMachine;
 use turing_lib::tape::Tape;
+
+mod slider;
 
 const WINDOW_WIDTH: f32 = 1000.0;
 const WINDOW_HEIGHT: f32 = 800.0;
@@ -57,15 +64,16 @@ struct MainState {
 
     should_update: bool,
     animation_state: Option<AnimationState>,
-    // text_displacement_percent: f32,
-    // anim_delta: f32, // -1 -> To the left, 0 -> Stay, 1 -> To the right
     last_tick: Option<TickResult>,
+
+    speed_slider: Slider,
 }
 
 impl MainState {
     fn new() -> GameResult<MainState> {
         let mut s = MainState {
-            turing_machine: TuringMachine::new_from_file("main.tng", "1010").unwrap(),
+            // turing_machine: TuringMachine::new_from_file("main.tng", "1010").unwrap(),
+            turing_machine: TuringMachine::new_from_file("main.tng", "aaaabbb").unwrap(),
 
             writing_animation: None,
 
@@ -79,8 +87,12 @@ impl MainState {
                 next_stage: Instant::now() + Duration::from_millis(LAST_WAIT_DURATION_MS),
             }),
             should_update: true,
-            // text_displacement_percent: 0.0,
-            // anim_delta: 0.0,
+            speed_slider: Slider::new(
+                Point2::from([10.0, WINDOW_HEIGHT - 30.0]),
+                Rect::new(0.0, 0.0, 200.0, 10.0),
+                10.0,
+                0.5,
+            ),
         };
 
         s.visual_head_idx = s.turing_machine.head_idx();
@@ -90,18 +102,19 @@ impl MainState {
     }
 }
 
-const FIRST_WAIT_DURATION_MS: u64 = 300;
-const HEAD_MOVE_DURATION_MS: u64 = 1000;
-const LAST_WAIT_DURATION_MS: u64 = 300;
+const FIRST_WAIT_DURATION_MS: u64 = 100;
+const HEAD_MOVE_DURATION_MS: u64 = 333;
+const LAST_WAIT_DURATION_MS: u64 = 100;
 
 impl event::EventHandler<ggez::GameError> for MainState {
-    fn update(&mut self, ctx: &mut Context) -> GameResult {
+    fn update(&mut self, _ctx: &mut Context) -> GameResult {
         if self.turing_machine.is_halted() {
             return Ok(());
         }
 
         if let Some(ref mut animation_state) = self.animation_state {
             if Instant::now() >= animation_state.next_stage {
+                let speed_multiplier = (1.0 - self.speed_slider.value()) * 4.0 + 1.0;
                 let (new_animation, animation_duration) = match animation_state.animation {
                     Animation::FirstWait => {
                         self.writing_animation = None;
@@ -120,7 +133,9 @@ impl event::EventHandler<ggez::GameError> for MainState {
                                 delta: anim_delta,
                                 current_text_displacement: 0.0,
                             },
-                            Duration::from_millis(HEAD_MOVE_DURATION_MS),
+                            Duration::from_millis(
+                                (HEAD_MOVE_DURATION_MS as f32 * speed_multiplier) as u64,
+                            ),
                         )
                     }
                     Animation::HeadMove { .. } => {
@@ -128,14 +143,18 @@ impl event::EventHandler<ggez::GameError> for MainState {
                         self.should_update = true;
                         (
                             Animation::LastWait,
-                            Duration::from_millis(LAST_WAIT_DURATION_MS),
+                            Duration::from_millis(
+                                (LAST_WAIT_DURATION_MS as f32 * speed_multiplier) as u64,
+                            ),
                         )
                     }
                     Animation::LastWait => {
                         self.visual_tape = self.turing_machine.tape().clone();
                         (
                             Animation::FirstWait,
-                            Duration::from_millis(FIRST_WAIT_DURATION_MS),
+                            Duration::from_millis(
+                                (FIRST_WAIT_DURATION_MS as f32 * speed_multiplier) as u64,
+                            ),
                         )
                     }
                 };
@@ -431,7 +450,52 @@ impl event::EventHandler<ggez::GameError> for MainState {
             );
         }
 
+        self.speed_slider.draw(ctx, &mut canvas).unwrap();
+
         canvas.finish(ctx)?;
+        Ok(())
+    }
+
+    fn mouse_button_down_event(
+        &mut self,
+        _ctx: &mut Context,
+        _button: MouseButton,
+        x: f32,
+        y: f32,
+    ) -> GameResult {
+        self.speed_slider.handle_mouse_down(x, y);
+        Ok(())
+    }
+
+    fn mouse_button_up_event(
+        &mut self,
+        _ctx: &mut Context,
+        _button: MouseButton,
+        x: f32,
+        y: f32,
+    ) -> GameResult {
+        self.speed_slider.handle_mouse_up(x, y);
+        Ok(())
+    }
+
+    fn mouse_motion_event(
+        &mut self,
+        ctx: &mut Context,
+        x: f32,
+        y: f32,
+        _dx: f32,
+        _dy: f32,
+    ) -> Result<(), ggez::GameError> {
+        self.speed_slider.handle_mouse_move(x, y);
+        set_cursor_type(
+            ctx,
+            if self.speed_slider.is_mouse_over_handle(x, y) {
+                CursorIcon::Hand
+            } else {
+                CursorIcon::Default
+            },
+        );
+
         Ok(())
     }
 }

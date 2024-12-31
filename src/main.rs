@@ -1,4 +1,5 @@
-use core::panic;
+use std::env::args;
+use std::process::exit;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -15,7 +16,6 @@ use ggez::graphics::TextFragment;
 use ggez::graphics::{self, Color};
 use ggez::input::mouse::set_cursor_type;
 use ggez::input::mouse::CursorIcon;
-use ggez::mint::Point2;
 use ggez::{Context, GameResult};
 use slider::Slider;
 use turing_lib::machine::Symbol;
@@ -70,10 +70,9 @@ struct MainState {
 }
 
 impl MainState {
-    fn new() -> GameResult<MainState> {
+    fn new(filename: &str, tape: &str) -> GameResult<MainState> {
         let mut s = MainState {
-            // turing_machine: TuringMachine::new_from_file("main.tng", "1010").unwrap(),
-            turing_machine: TuringMachine::new_from_file("main.tng", "aaabbb").unwrap(),
+            turing_machine: TuringMachine::new_from_file(filename, tape).unwrap(),
 
             writing_animation: None,
 
@@ -84,7 +83,7 @@ impl MainState {
             animation_state: Some(AnimationState {
                 animation: Animation::LastWait,
                 stage_begin: Instant::now(),
-                next_stage: Instant::now() + Duration::from_millis(LAST_WAIT_DURATION_MS),
+                next_stage: Instant::now() + Duration::from_millis(1000),
             }),
             should_update: true,
             speed_slider: Slider::new(
@@ -498,7 +497,14 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
 pub fn main() -> GameResult {
     if CELL_COUNT as isize % 2 == 0 {
-        panic!("Cell count must be an odd positive whole float.");
+        eprintln!("Cell count must be an odd positive whole float.");
+        exit(1);
+    }
+
+    let args = args().collect::<Vec<_>>();
+    if args.len() != 3 {
+        eprintln!("Usage: ./turing <filename.tng> <tape_data>");
+        exit(1);
     }
 
     let cb = ggez::ContextBuilder::new("Turing Machine Simulator", "keelus");
@@ -510,6 +516,6 @@ pub fn main() -> GameResult {
             window_mode
         })
         .build()?;
-    let state = MainState::new()?;
+    let state = MainState::new(&args[1], &args[2])?;
     event::run(ctx, event_loop, state)
 }

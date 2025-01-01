@@ -16,27 +16,20 @@ use ggez::graphics::TextFragment;
 use ggez::graphics::{self, Color};
 use ggez::input::mouse::set_cursor_type;
 use ggez::input::mouse::CursorIcon;
+use ggez::mint::Point2;
 use ggez::{Context, GameResult};
-use slider::Slider;
+use num_input::NumberInput;
 use turing_lib::machine::Symbol;
 use turing_lib::machine::TapeSide;
 use turing_lib::machine::TickResult;
 use turing_lib::machine::TuringMachine;
 use turing_lib::tape::Tape;
 
-mod slider;
-
-const WINDOW_WIDTH: f32 = 1000.0;
-const WINDOW_HEIGHT: f32 = 800.0;
+mod num_input;
 
 const HORIZ_MARGIN: f32 = 80.0;
-const CELL_COUNT: f32 = 7.0;
-const CELL_SIZE: f32 = (WINDOW_WIDTH - HORIZ_MARGIN * 2.0) / CELL_COUNT;
 
-const HEAD_TRIANGLE_WIDTH: f32 = CELL_SIZE / 3.0;
-const HEAD_TRIANGLE_HEIGHT: f32 = CELL_SIZE / 2.4;
-const HEAD_TRIANGLE_MARGIN: f32 = CELL_SIZE / 8.0;
-
+const DEFAULT_CELL_COUNT: usize = 7;
 const WRITE_ANIM_MAX_ALPHA: f32 = 0.8;
 
 struct AnimationState {
@@ -54,6 +47,30 @@ enum Animation {
     LastWait,
 }
 
+struct Sizing {
+    window: Point2<f32>,
+
+    cell_size: f32,
+
+    head_triangle: Point2<f32>,
+    head_triangle_margin: f32,
+}
+
+impl Sizing {
+    pub fn calculate(window_width: f32, window_height: f32, cell_count: usize) -> Self {
+        const HORIZ_MARGIN: f32 = 80.0;
+        let cell_size = (window_width - HORIZ_MARGIN * 2.0) / cell_count as f32;
+        Self {
+            window: [window_width, window_height].into(),
+
+            cell_size,
+
+            head_triangle: [cell_size / 3.0, cell_size / 2.4].into(),
+            head_triangle_margin: cell_size / 8.0,
+        }
+    }
+}
+
 struct MainState {
     turing_machine: TuringMachine,
 
@@ -66,11 +83,19 @@ struct MainState {
     animation_state: Option<AnimationState>,
     last_tick: Option<TickResult>,
 
-    speed_slider: Slider,
+    speed_input: NumberInput,
+    cells_input: NumberInput,
+
+    sizing: Sizing,
 }
 
 impl MainState {
-    fn new(filename: &str, tape: &str) -> GameResult<MainState> {
+    fn new(
+        filename: &str,
+        tape: &str,
+        window_width: f32,
+        window_height: f32,
+    ) -> GameResult<MainState> {
         let mut s = MainState {
             turing_machine: TuringMachine::new_from_file(filename, tape).unwrap(),
 
@@ -86,10 +111,25 @@ impl MainState {
                 next_stage: Instant::now() + Duration::from_millis(1000),
             }),
             should_update: true,
-            speed_slider: Slider::new(
-                Rect::new(20.0, WINDOW_HEIGHT - 30.0, 200.0, 10.0),
-                10.0,
-                0.5,
+            sizing: Sizing::calculate(window_width, window_height, DEFAULT_CELL_COUNT),
+
+            cells_input: NumberInput::new(
+                "Visible cells",
+                7,
+                2,
+                -2,
+                3,
+                71,
+                Rect::new(30.0, window_height - 120.0, 100.0, 30.0),
+            ),
+            speed_input: NumberInput::new(
+                "Simulation speed",
+                3,
+                1,
+                -1,
+                1,
+                5,
+                Rect::new(30.0, window_height - 50.0, 100.0, 30.0),
             ),
         };
 
@@ -112,7 +152,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
         if let Some(ref mut animation_state) = self.animation_state {
             if Instant::now() >= animation_state.next_stage {
-                let speed_multiplier = (1.0 - self.speed_slider.value()) * 4.0 + 1.0;
+                let speed_multiplier = (1.0 - self.speed_input.percent() as f32) * 4.0 + 1.0;
                 let (new_animation, animation_duration) = match animation_state.animation {
                     Animation::FirstWait => {
                         self.writing_animation = None;
@@ -196,7 +236,6 @@ impl event::EventHandler<ggez::GameError> for MainState {
         }
 
         let mut prev_tape_content = self.turing_machine.tape().get_content().to_vec();
-        // let mut prev_tape_content = self.turing_machine.tape().0.clone();
         let tick_result = self.turing_machine.tick();
 
         if let Some(TapeSide::Left) = tick_result.extended_tape_on_side {
@@ -221,23 +260,40 @@ impl event::EventHandler<ggez::GameError> for MainState {
         let head_color = Color::RED;
         let mut canvas = graphics::Canvas::from_frame(ctx, bg_color);
 
-        let stroke_width = (CELL_SIZE / 2.0 * 0.03).ceil().max(1.0);
-        let head_stroke_width = (CELL_SIZE / 2.0 * 0.07).ceil().max(1.0);
+        let stroke_width = (self.sizing.cell_size / 2.0 * 0.03).ceil().max(1.0);
+        let head_stroke_width = (self.sizing.cell_size / 2.0 * 0.07).ceil().max(1.0);
 
         let horiz_line = graphics::Mesh::new_line(
             ctx,
             &[
-                [HORIZ_MARGIN - stroke_width / 2.0 - CELL_SIZE, 0.0],
                 [
-                    WINDOW_WIDTH - HORIZ_MARGIN + stroke_width / 2.0 + CELL_SIZE,
+                    HORIZ_MARGIN - stroke_width / 2.0 - self.sizing.cell_size,
+                    0.0,
+                ],
+                [
+                    self.sizing.window.x - HORIZ_MARGIN
+                        + stroke_width / 2.0
+                        + self.sizing.cell_size,
                     0.0,
                 ],
             ],
             stroke_width,
             Color::WHITE,
         )?;
-        canvas.draw(&horiz_line, [0.0, WINDOW_HEIGHT / 2.0 - CELL_SIZE / 2.0]);
-        canvas.draw(&horiz_line, [0.0, WINDOW_HEIGHT / 2.0 + CELL_SIZE / 2.0]);
+        canvas.draw(
+            &horiz_line,
+            [
+                0.0,
+                self.sizing.window.y / 2.0 - self.sizing.cell_size / 2.0,
+            ],
+        );
+        canvas.draw(
+            &horiz_line,
+            [
+                0.0,
+                self.sizing.window.y / 2.0 + self.sizing.cell_size / 2.0,
+            ],
+        );
 
         let mut text_displacement_percent = 0.0;
         if let Some(animation_state) = &self.animation_state {
@@ -252,16 +308,17 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
         let vert_line = graphics::Mesh::new_line(
             ctx,
-            &[[0.0, 0.0], [0.0, CELL_SIZE]],
+            &[[0.0, 0.0], [0.0, self.sizing.cell_size]],
             stroke_width,
             Color::WHITE,
         )?;
-        for i in 0..=(CELL_COUNT as usize + 1) {
+        for i in 0..=(self.cells_input.value() as usize + 1) {
             canvas.draw(
                 &vert_line,
                 [
-                    HORIZ_MARGIN + CELL_SIZE * (i as f32) - CELL_SIZE * text_displacement_percent,
-                    WINDOW_HEIGHT / 2.0 - CELL_SIZE / 2.0,
+                    HORIZ_MARGIN + self.sizing.cell_size * (i as f32)
+                        - self.sizing.cell_size * text_displacement_percent,
+                    self.sizing.window.y / 2.0 - self.sizing.cell_size / 2.0,
                 ],
             );
         }
@@ -270,22 +327,26 @@ impl event::EventHandler<ggez::GameError> for MainState {
             ctx,
             graphics::DrawMode::Fill(FillOptions::default()),
             &[
-                [HEAD_TRIANGLE_WIDTH / 2.0, 0.0],
-                [0.0, HEAD_TRIANGLE_HEIGHT],
-                [HEAD_TRIANGLE_WIDTH, HEAD_TRIANGLE_HEIGHT],
+                [self.sizing.head_triangle.x / 2.0, 0.0],
+                [0.0, self.sizing.head_triangle.y],
+                [self.sizing.head_triangle.x, self.sizing.head_triangle.y],
             ],
             head_color,
         )?;
         canvas.draw(
             &head_triangle,
             [
-                WINDOW_WIDTH / 2.0 - HEAD_TRIANGLE_WIDTH / 2.0,
-                WINDOW_HEIGHT / 2.0 + CELL_SIZE / 2.0 + HEAD_TRIANGLE_MARGIN,
+                self.sizing.window.x / 2.0 - self.sizing.head_triangle.x / 2.0,
+                self.sizing.window.y / 2.0
+                    + self.sizing.cell_size / 2.0
+                    + self.sizing.head_triangle_margin,
             ],
         );
 
         // + 1 to also draw non visible border cells
-        for i in -(CELL_COUNT as isize / 2 + 1)..=(CELL_COUNT as isize / 2 + 1) {
+        for i in -(self.cells_input.value() as isize / 2 + 1)
+            ..=(self.cells_input.value() as isize / 2 + 1)
+        {
             let text_fragment = {
                 let correct_index = self.visual_head_idx as isize + i;
 
@@ -301,7 +362,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
                     }
                 };
                 let text_content: String = format!("{char_at}");
-                let text_size = CELL_SIZE * 0.75;
+                let text_size = self.sizing.cell_size * 0.75;
 
                 let mut text_fragment = TextFragment::default();
                 text_fragment.text = text_content;
@@ -321,10 +382,10 @@ impl event::EventHandler<ggez::GameError> for MainState {
             canvas.draw(
                 &text_piece,
                 [
-                    (CELL_SIZE * (i as f32) + WINDOW_WIDTH / 2.0)
+                    (self.sizing.cell_size * (i as f32) + self.sizing.window.x / 2.0)
                         - text_width / 2.0
-                        - CELL_SIZE * text_displacement_percent,
-                    WINDOW_HEIGHT / 2.0 - text_height / 2.0,
+                        - self.sizing.cell_size * text_displacement_percent,
+                    self.sizing.window.y / 2.0 - text_height / 2.0,
                 ],
             );
 
@@ -333,15 +394,16 @@ impl event::EventHandler<ggez::GameError> for MainState {
                     let write_opacity_square = graphics::Mesh::new_rectangle(
                         ctx,
                         graphics::DrawMode::Fill(FillOptions::default()),
-                        Rect::new(0.0, 0.0, CELL_SIZE, CELL_SIZE),
+                        Rect::new(0.0, 0.0, self.sizing.cell_size, self.sizing.cell_size),
                         Color::new(bg_color.r, bg_color.b, bg_color.g, alpha),
                     )?;
 
                     canvas.draw(
                         &write_opacity_square,
                         [
-                            (CELL_SIZE * (i as f32) + WINDOW_WIDTH / 2.0) - CELL_SIZE / 2.0,
-                            WINDOW_HEIGHT / 2.0 - CELL_SIZE / 2.0,
+                            (self.sizing.cell_size * (i as f32) + self.sizing.window.x / 2.0)
+                                - self.sizing.cell_size / 2.0,
+                            self.sizing.window.y / 2.0 - self.sizing.cell_size / 2.0,
                         ],
                     );
                 }
@@ -352,32 +414,35 @@ impl event::EventHandler<ggez::GameError> for MainState {
         let square = graphics::Mesh::new_rectangle(
             ctx,
             graphics::DrawMode::Fill(FillOptions::default()),
-            Rect::new(0.0, 0.0, HORIZ_MARGIN, CELL_SIZE + 10.0),
+            Rect::new(0.0, 0.0, HORIZ_MARGIN, self.sizing.cell_size + 10.0),
             bg_color,
         )?;
         canvas.draw(
             &square,
-            [0.0, WINDOW_HEIGHT / 2.0 - (CELL_SIZE + 10.0) / 2.0],
+            [
+                0.0,
+                self.sizing.window.y / 2.0 - (self.sizing.cell_size + 10.0) / 2.0,
+            ],
         );
         canvas.draw(
             &square,
             [
-                WINDOW_WIDTH - HORIZ_MARGIN,
-                WINDOW_HEIGHT / 2.0 - (CELL_SIZE + 10.0) / 2.0,
+                self.sizing.window.x - HORIZ_MARGIN,
+                self.sizing.window.y / 2.0 - (self.sizing.cell_size + 10.0) / 2.0,
             ],
         );
 
         let head_square = graphics::Mesh::new_rectangle(
             ctx,
             graphics::DrawMode::Stroke(StrokeOptions::default().with_line_width(head_stroke_width)),
-            Rect::new(0.0, 0.0, CELL_SIZE, CELL_SIZE),
+            Rect::new(0.0, 0.0, self.sizing.cell_size, self.sizing.cell_size),
             head_color,
         )?;
         canvas.draw(
             &head_square,
             [
-                WINDOW_WIDTH / 2.0 - CELL_SIZE / 2.0,
-                WINDOW_HEIGHT / 2.0 - CELL_SIZE / 2.0,
+                self.sizing.window.x / 2.0 - self.sizing.cell_size / 2.0,
+                self.sizing.window.y / 2.0 - self.sizing.cell_size / 2.0,
             ],
         );
 
@@ -406,7 +471,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
             canvas.draw(
                 &text_piece,
                 [
-                    WINDOW_WIDTH - horiz_text_margin - text_width,
+                    self.sizing.window.x - horiz_text_margin - text_width,
                     vert_text_margin,
                 ],
             );
@@ -445,7 +510,8 @@ impl event::EventHandler<ggez::GameError> for MainState {
             canvas.draw(&text_piece, [text_margins, text_margins + 30.0]);
         }
 
-        self.speed_slider.draw(ctx, &mut canvas).unwrap();
+        self.cells_input.draw(ctx, &mut canvas).unwrap();
+        self.speed_input.draw(ctx, &mut canvas).unwrap();
 
         canvas.finish(ctx)?;
         Ok(())
@@ -458,18 +524,15 @@ impl event::EventHandler<ggez::GameError> for MainState {
         x: f32,
         y: f32,
     ) -> GameResult {
-        self.speed_slider.handle_mouse_down(x, y);
-        Ok(())
-    }
+        if self.cells_input.handle_mouse_click(x, y) {
+            self.sizing = Sizing::calculate(
+                self.sizing.window.x,
+                self.sizing.window.y,
+                self.cells_input.value() as usize,
+            );
+        }
 
-    fn mouse_button_up_event(
-        &mut self,
-        _ctx: &mut Context,
-        _button: MouseButton,
-        x: f32,
-        y: f32,
-    ) -> GameResult {
-        self.speed_slider.handle_mouse_up(x, y);
+        self.speed_input.handle_mouse_click(x, y);
         Ok(())
     }
 
@@ -481,10 +544,11 @@ impl event::EventHandler<ggez::GameError> for MainState {
         _dx: f32,
         _dy: f32,
     ) -> Result<(), ggez::GameError> {
-        self.speed_slider.handle_mouse_move(x, y);
         set_cursor_type(
             ctx,
-            if self.speed_slider.is_mouse_over_handle(x, y) {
+            if self.cells_input.is_mouse_over_any_button(x, y)
+                || self.speed_input.is_mouse_over_any_button(x, y)
+            {
                 CursorIcon::Hand
             } else {
                 CursorIcon::Default
@@ -493,14 +557,28 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
         Ok(())
     }
+
+    fn resize_event(
+        &mut self,
+        _ctx: &mut Context,
+        width: f32,
+        height: f32,
+    ) -> Result<(), ggez::GameError> {
+        self.sizing = Sizing::calculate(width, height, self.cells_input.value() as usize);
+
+        let mut new_rect = self.cells_input.rect();
+        new_rect.y = height - 120.0;
+        self.cells_input.set_rect(new_rect);
+
+        let mut new_rect = self.speed_input.rect();
+        new_rect.y = height - 50.0;
+        self.speed_input.set_rect(new_rect);
+
+        Ok(())
+    }
 }
 
 pub fn main() -> GameResult {
-    if CELL_COUNT as isize % 2 == 0 {
-        eprintln!("Cell count must be an odd positive whole float.");
-        exit(1);
-    }
-
     let args = args().collect::<Vec<_>>();
     if args.len() != 3 {
         eprintln!("Usage: ./turing <filename.tng> <tape_data>");
@@ -508,14 +586,19 @@ pub fn main() -> GameResult {
     }
 
     let cb = ggez::ContextBuilder::new("Turing Machine Simulator", "keelus");
+
+    const WINDOW_WIDTH: f32 = 1000.0;
+    const WINDOW_HEIGHT: f32 = 800.0;
+
     let (ctx, event_loop) = cb
         .window_mode({
             let mut window_mode = WindowMode::default();
+            window_mode.resizable = true;
             window_mode.width = WINDOW_WIDTH;
             window_mode.height = WINDOW_HEIGHT;
             window_mode
         })
         .build()?;
-    let state = MainState::new(&args[1], &args[2])?;
+    let state = MainState::new(&args[1], &args[2], WINDOW_WIDTH, WINDOW_HEIGHT)?;
     event::run(ctx, event_loop, state)
 }

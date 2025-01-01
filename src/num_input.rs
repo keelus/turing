@@ -3,6 +3,8 @@ use ggez::{
     Context, GameResult,
 };
 
+use crate::ACCENT_COLOR;
+
 pub struct NumberInput {
     rect: Rect,
 
@@ -12,12 +14,8 @@ pub struct NumberInput {
     plus_button_rect: Rect,
 
     value: i16,
-
-    increment: i16,
-    decrement: i16,
-
-    min: i16,
-    max: i16,
+    step: i16,
+    limit: (i16, i16),
 }
 
 const MARGIN_VALUE_BUTTON: f32 = 10.0;
@@ -27,10 +25,8 @@ impl NumberInput {
     pub fn new(
         label_text: &str,
         start_value: i16,
-        increment: i16,
-        decrement: i16,
-        min: i16,
-        max: i16,
+        step: i16,
+        limit: (i16, i16),
         value_rect: Rect,
         text_color: Color,
     ) -> Self {
@@ -60,11 +56,8 @@ impl NumberInput {
 
             value: start_value,
 
-            increment,
-            decrement,
-
-            min,
-            max,
+            step,
+            limit,
         }
     }
 
@@ -90,19 +83,25 @@ impl NumberInput {
                 }),
                 font: None,
             });
-            let Rect { h: text_height, .. } = text_piece.dimensions(ctx).unwrap();
+            let text_height = text_piece.dimensions(ctx).unwrap().h;
             canvas.draw(
                 &text_piece,
                 [self.rect.x + 5.0, self.rect.y + text_height / 3.0],
             );
         }
 
-        let mut draw_button = |rect: &Rect, text: &str| -> GameResult {
+        let mut draw_button = |rect: &Rect, text: &str, enabled: bool| -> GameResult {
             let button_rectangle = graphics::Mesh::new_rectangle(
                 ctx,
                 graphics::DrawMode::Fill(FillOptions::default()),
                 *rect,
-                Color::RED,
+                if enabled {
+                    ACCENT_COLOR
+                } else {
+                    let mut color = ACCENT_COLOR;
+                    color.a = 0.4;
+                    color
+                },
             )?;
 
             canvas.draw(&button_rectangle, [0.0, 0.0]);
@@ -131,12 +130,12 @@ impl NumberInput {
             Ok(())
         };
 
-        draw_button(&self.minus_button_rect, "-")?;
-        draw_button(&self.plus_button_rect, "+")?;
+        draw_button(&self.minus_button_rect, "-", self.value != self.limit.0)?;
+        draw_button(&self.plus_button_rect, "+", self.value != self.limit.1)?;
 
         // Label
         {
-            let Rect { h: text_height, .. } = self.label_text.dimensions(ctx).unwrap();
+            let text_height = self.label_text.dimensions(ctx).unwrap().h;
 
             canvas.draw(
                 &self.label_text,
@@ -148,11 +147,11 @@ impl NumberInput {
     }
 
     pub fn is_mouse_over_minus_button(&self, x: f32, y: f32) -> bool {
-        self.minus_button_rect.contains([x, y])
+        self.value != self.limit.0 && self.minus_button_rect.contains([x, y])
     }
 
     pub fn is_mouse_over_plus_button(&self, x: f32, y: f32) -> bool {
-        self.plus_button_rect.contains([x, y])
+        self.value != self.limit.1 && self.plus_button_rect.contains([x, y])
     }
 
     pub fn is_mouse_over_any_button(&self, x: f32, y: f32) -> bool {
@@ -161,10 +160,10 @@ impl NumberInput {
 
     pub fn handle_mouse_click(&mut self, x: f32, y: f32) -> bool {
         if self.is_mouse_over_minus_button(x, y) {
-            self.value = (self.value + self.decrement).max(self.min).min(self.max);
+            self.value = (self.value - self.step).max(self.limit.0).min(self.limit.1);
             true
         } else if self.is_mouse_over_plus_button(x, y) {
-            self.value = (self.value + self.increment).max(self.min).min(self.max);
+            self.value = (self.value + self.step).max(self.limit.0).min(self.limit.1);
             true
         } else {
             false
@@ -176,7 +175,7 @@ impl NumberInput {
     }
 
     pub fn percent(&self) -> f32 {
-        (self.value as f32 * 100.0 / self.max as f32) / 100.0
+        (self.value as f32 * 100.0 / self.limit.1 as f32) / 100.0
     }
 
     pub fn rect(&self) -> Rect {

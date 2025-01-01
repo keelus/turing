@@ -1,5 +1,4 @@
 use ggez::{
-    conf::WindowMode,
     event::{self, MouseButton},
     glam::*,
     graphics::{self, Color, Drawable, FillOptions, PxScale, Rect, StrokeOptions, TextFragment},
@@ -175,7 +174,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
         if let Some(ref mut animation_state) = self.animation_state {
             if Instant::now() >= animation_state.next_stage {
-                let speed_multiplier = (1.0 - self.speed_input.percent() as f32) * 4.0 + 1.0;
+                let speed_multiplier = (1.0 - self.speed_input.percent()) * 4.0 + 1.0;
                 let (new_animation, animation_duration) = match animation_state.animation {
                     Animation::FirstWait => {
                         self.writing_animation = None;
@@ -370,31 +369,32 @@ impl event::EventHandler<ggez::GameError> for MainState {
         for i in -(self.cells_input.value() as isize / 2 + 1)
             ..=(self.cells_input.value() as isize / 2 + 1)
         {
-            let text_fragment = {
-                let correct_index = self.visual_head_idx as isize + i;
+            let correct_index = self.visual_head_idx as isize + i;
 
-                let char_at = {
-                    if correct_index < 0 || correct_index >= self.visual_tape.len() as isize {
-                        self.turing_machine.blank_symbol()
-                    } else {
-                        match self.visual_tape.read(correct_index as usize) {
-                            Symbol::Blank => self.turing_machine.blank_symbol(),
-                            Symbol::Mark(c) => c,
-                            _ => unreachable!("Default Symbol won't be present in the tape."),
-                        }
+            let char_at = {
+                if correct_index < 0 || correct_index >= self.visual_tape.len() as isize {
+                    self.turing_machine.blank_symbol()
+                } else {
+                    match self.visual_tape.read(correct_index as usize) {
+                        Symbol::Blank => self.turing_machine.blank_symbol(),
+                        Symbol::Mark(c) => c,
+                        _ => unreachable!("Default Symbol won't be present in the tape."),
                     }
-                };
-                let text_content: String = format!("{char_at}");
-                let text_size = self.sizing.cell_size * 0.75;
+                }
+            };
+            let text_content: String = format!("{char_at}");
+            let text_size = self.sizing.cell_size * 0.75;
 
-                let mut text_fragment = TextFragment::default();
-                text_fragment.text = text_content;
-                text_fragment.color = Some(fg_color);
-                text_fragment.scale(PxScale {
+            let text_fragment = TextFragment {
+                text: text_content,
+                font: None,
+                scale: Some(PxScale {
                     x: text_size,
                     y: text_size,
-                })
+                }),
+                color: Some(fg_color),
             };
+
             let text_piece = graphics::Text::new(text_fragment);
             let Rect {
                 w: text_width,
@@ -617,8 +617,7 @@ pub fn main() -> GameResult {
 
     let (ctx, event_loop) = cb
         .window_mode({
-            let mut window_mode = WindowMode::default();
-            window_mode.resizable = true;
+            let mut window_mode = ggez::conf::WindowMode::default().resizable(true);
             window_mode.width = WINDOW_WIDTH;
             window_mode.height = WINDOW_HEIGHT;
             window_mode.min_width = 400.0;

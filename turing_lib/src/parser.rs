@@ -1,3 +1,4 @@
+use core::panic;
 use std::collections::{HashMap, HashSet};
 
 use crate::{
@@ -31,10 +32,10 @@ pub fn parse_file(file_data: &str, tape: Tape) -> Result<TuringMachine, String> 
 }
 
 fn parse_config(file_data: &str) -> Result<Config, String> {
-    let mut config_lines = file_data.lines().skip_while(|&l| l != "config {").skip(1);
+    let config_lines = file_data.lines().skip_while(|&l| l != "config {").skip(1);
     let mut config_map = HashMap::new();
 
-    while let Some(line) = config_lines.next() {
+    for line in config_lines {
         match line.trim() {
             "}" => {
                 break;
@@ -50,8 +51,7 @@ fn parse_config(file_data: &str) -> Result<Config, String> {
                         );
                     } else {
                         return Err(
-                                format!(
-                                "Unexpected name value. It must be between double quotes (e.g. name: \"A name for the machine\")."));
+                                "Unexpected name value. It must be between double quotes (e.g. name: \"A name for the machine\").".to_string());
                     }
                 }
                 ["blank_symbol", symbol] => match symbol.chars().collect::<Vec<_>>()[..] {
@@ -59,7 +59,7 @@ fn parse_config(file_data: &str) -> Result<Config, String> {
                         config_map.insert("blank_symbol", symbol.to_string());
                     }
                     _ => {
-                        return Err(format!("Unexpected blank symbol. It must be a valid char between single quotes (e.g. blank_symbol: '_')."));
+                        return Err("Unexpected blank symbol. It must be a valid char between single quotes (e.g. blank_symbol: '_').".to_string());
                     }
                 },
                 ["head_start", index] => {
@@ -86,9 +86,9 @@ fn parse_config(file_data: &str) -> Result<Config, String> {
             .get("head_start")
             .expect("There was no head start index provided.");
 
-        index.parse().expect(&format!(
-            "Invalid head start index provided (\"{index}\"). It must be a non negative integer."
-        ))
+        index.parse().unwrap_or_else(|_| 
+            panic!("Invalid head start index provided (\"{index}\"). It must be a non negative integer.")
+        )
     };
 
     Ok(Config {
@@ -114,11 +114,11 @@ fn parse_states(
     let mut transition_states = HashSet::new(); // To check if all transitions are valid
     let mut initial_state_name = None;
 
-    let mut state_lines = file_data.lines().skip_while(|&l| l != "states {").skip(1);
+    let state_lines = file_data.lines().skip_while(|&l| l != "states {").skip(1);
 
     let mut current_state: Option<ParsingState> = None;
 
-    while let Some(line) = state_lines.next() {
+    for line in state_lines {
         match line.trim() {
             "}" => {
                 if current_state.is_some() {
@@ -126,7 +126,9 @@ fn parse_states(
 
                     if state.is_initial {
                         if initial_state_name.is_some() {
-                            return Err(format!("There was more than one initial state provided."));
+                            return Err(
+                                "There was more than one initial state provided.".to_string()
+                            );
                         }
 
                         initial_state_name = Some(state.name);
@@ -249,9 +251,9 @@ fn parse_states(
                                 ),
                             );
                         } else {
-                            return Err(format!(
-                                "Unexpected transition declaration outside a state."
-                            ));
+                            return Err(
+                                "Unexpected transition declaration outside a state.".to_string()
+                            );
                         }
                     }
                     _ => {

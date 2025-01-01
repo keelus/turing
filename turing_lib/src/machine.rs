@@ -175,19 +175,19 @@ impl TuringMachine {
                 HeadMovement::Stay => None,
             };
 
-            return TickResult {
+            TickResult {
                 written_different_symbol: new_symbol != *current_symbol,
                 extended_tape_on_side,
                 head_movement: transition.head_movement,
-            };
+            }
         } else {
             self.halted = true;
 
-            return TickResult {
+            TickResult {
                 written_different_symbol: false,
                 extended_tape_on_side: None,
                 head_movement: HeadMovement::Stay,
-            };
+            }
         }
     }
 

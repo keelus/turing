@@ -1,29 +1,22 @@
-use std::env::args;
-use std::process::exit;
-use std::time::Duration;
-use std::time::Instant;
-
-use ggez::conf::WindowMode;
-use ggez::event;
-use ggez::event::MouseButton;
-use ggez::glam::*;
-use ggez::graphics::Drawable;
-use ggez::graphics::FillOptions;
-use ggez::graphics::PxScale;
-use ggez::graphics::Rect;
-use ggez::graphics::StrokeOptions;
-use ggez::graphics::TextFragment;
-use ggez::graphics::{self, Color};
-use ggez::input::mouse::set_cursor_type;
-use ggez::input::mouse::CursorIcon;
-use ggez::mint::Point2;
-use ggez::{Context, GameResult};
+use ggez::{
+    conf::WindowMode,
+    event::{self, MouseButton},
+    glam::*,
+    graphics::{self, Color, Drawable, FillOptions, PxScale, Rect, StrokeOptions, TextFragment},
+    input::mouse::{set_cursor_type, CursorIcon},
+    mint::Point2,
+    Context, GameResult,
+};
 use num_input::NumberInput;
-use turing_lib::machine::Symbol;
-use turing_lib::machine::TapeSide;
-use turing_lib::machine::TickResult;
-use turing_lib::machine::TuringMachine;
-use turing_lib::tape::Tape;
+use std::{
+    env::args,
+    process::exit,
+    time::{Duration, Instant},
+};
+use turing_lib::{
+    machine::{Symbol, TickResult, TuringMachine},
+    tape::{Tape, TapeSide},
+};
 
 mod num_input;
 
@@ -31,6 +24,10 @@ const HORIZ_MARGIN: f32 = 80.0;
 
 const DEFAULT_CELL_COUNT: usize = 7;
 const WRITE_ANIM_MAX_ALPHA: f32 = 0.8;
+
+const FIRST_WAIT_DURATION_MS: u64 = 100;
+const HEAD_MOVE_DURATION_MS: u64 = 333;
+const LAST_WAIT_DURATION_MS: u64 = 100;
 
 const ACCENT_COLOR: Color = Color {
     r: 110.0 / 255.0,
@@ -169,10 +166,6 @@ impl MainState {
         (bg_color, fg_color)
     }
 }
-
-const FIRST_WAIT_DURATION_MS: u64 = 100;
-const HEAD_MOVE_DURATION_MS: u64 = 333;
-const LAST_WAIT_DURATION_MS: u64 = 100;
 
 impl event::EventHandler<ggez::GameError> for MainState {
     fn update(&mut self, _ctx: &mut Context) -> GameResult {

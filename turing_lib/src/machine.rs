@@ -1,4 +1,6 @@
-use super::{parser, tape::Tape};
+use crate::{parser, tape::TapeSide};
+
+use super::tape::Tape;
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -26,15 +28,71 @@ pub enum TransitionSource {
 }
 
 pub struct State {
-    pub name: String,
-    pub transitions: HashMap<TransitionSource, Transition>,
+    name: String,
+    transitions: HashMap<TransitionSource, Transition>,
+}
+
+impl State {
+    pub fn new(name: String, transitions: HashMap<TransitionSource, Transition>) -> Self {
+        Self { name, transitions }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn transitions(&self) -> &HashMap<TransitionSource, Transition> {
+        &self.transitions
+    }
 }
 
 #[derive(Debug)]
 pub struct Transition {
+    head_movement: HeadMovement,
+    new_symbol: Symbol,
+    new_state: String,
+}
+
+impl Transition {
+    pub fn new(head_movement: HeadMovement, new_symbol: Symbol, new_state: String) -> Self {
+        Self {
+            head_movement,
+            new_symbol,
+            new_state,
+        }
+    }
+
+    pub fn head_movement(&self) -> HeadMovement {
+        self.head_movement
+    }
+
+    pub fn new_symbol(&self) -> Symbol {
+        self.new_symbol
+    }
+
+    pub fn new_state(&self) -> &str {
+        &self.new_state
+    }
+}
+
+pub struct TickResult {
+    pub written_different_symbol: bool,
+    pub extended_tape_on_side: Option<TapeSide>,
     pub head_movement: HeadMovement,
-    pub new_symbol: Symbol,
-    pub new_state: String,
+}
+
+impl TickResult {
+    pub fn written_different_symbol(&self) -> bool {
+        self.written_different_symbol
+    }
+
+    pub fn extended_tape_on_side(&self) -> &Option<TapeSide> {
+        &self.extended_tape_on_side
+    }
+
+    pub fn head_movement(&self) -> &HeadMovement {
+        &self.head_movement
+    }
 }
 
 pub struct TuringMachine {
@@ -51,24 +109,12 @@ pub struct TuringMachine {
     pub(crate) halted: bool,
 }
 
-#[derive(Debug)]
-pub enum TapeSide {
-    Left,
-    Right,
-}
-
-pub struct TickResult {
-    pub written_different_symbol: bool,
-    pub extended_tape_on_side: Option<TapeSide>,
-    pub head_movement: HeadMovement,
-}
-
 impl TuringMachine {
     pub fn new_from_file(filename: &str, tape_data: &str) -> Result<TuringMachine, String> {
         let file_data = fs::read_to_string(filename)
             .map_err(|_| format!("Could not open the file \"{}\"", filename))?;
 
-        let mut machine = parser::Parser::parse_file(&file_data, Tape(vec![]))?;
+        let mut machine = parser::parse_file(&file_data, Tape(vec![]))?;
         let tape = Tape::parse(tape_data, machine.blank_symbol);
         machine.tape = tape;
 
@@ -93,13 +139,9 @@ impl TuringMachine {
             Symbol::Blank => available_transitions.get(&TransitionSource::Blank),
         };
 
-        let transition = {
-            if transition.is_some() {
-                transition
-            } else {
-                available_transitions.get(&TransitionSource::Default)
-            }
-        };
+        // Search for a default transition if none
+        let transition =
+            transition.or_else(|| available_transitions.get(&TransitionSource::Default));
 
         if let Some(transition) = transition {
             let new_symbol = if let Symbol::Default = transition.new_symbol {
@@ -139,15 +181,13 @@ impl TuringMachine {
                 head_movement: transition.head_movement,
             };
         } else {
-            println!("No transition available.");
             self.halted = true;
+
             return TickResult {
                 written_different_symbol: false,
                 extended_tape_on_side: None,
                 head_movement: HeadMovement::Stay,
             };
-            // Check for default behaviour. Else, halt.
-            // println!("TODO")
         }
     }
 

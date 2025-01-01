@@ -5,6 +5,12 @@ use super::machine::Symbol;
 #[derive(Debug, Clone)]
 pub struct Tape(pub(crate) Vec<Symbol>);
 
+#[derive(Debug)]
+pub enum TapeSide {
+    Left,
+    Right,
+}
+
 impl Display for Tape {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(

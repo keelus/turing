@@ -1,3 +1,3 @@
 pub mod machine;
-pub mod parser;
+mod parser;
 pub mod tape;

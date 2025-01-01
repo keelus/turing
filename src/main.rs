@@ -87,6 +87,7 @@ struct MainState {
     cells_input: NumberInput,
 
     sizing: Sizing,
+    light_theme: bool,
 }
 
 impl MainState {
@@ -95,6 +96,7 @@ impl MainState {
         tape: &str,
         window_width: f32,
         window_height: f32,
+        light_theme: bool,
     ) -> GameResult<MainState> {
         let mut s = MainState {
             turing_machine: TuringMachine::new_from_file(filename, tape).unwrap(),
@@ -121,6 +123,11 @@ impl MainState {
                 3,
                 71,
                 Rect::new(30.0, window_height - 120.0, 100.0, 30.0),
+                if light_theme {
+                    Color::BLACK
+                } else {
+                    Color::WHITE
+                },
             ),
             speed_input: NumberInput::new(
                 "Simulation speed",
@@ -130,13 +137,39 @@ impl MainState {
                 1,
                 5,
                 Rect::new(30.0, window_height - 50.0, 100.0, 30.0),
+                if light_theme {
+                    Color::BLACK
+                } else {
+                    Color::WHITE
+                },
             ),
+            light_theme,
         };
 
         s.visual_head_idx = s.turing_machine.head_idx();
         s.visual_tape = s.turing_machine.tape().clone();
 
         Ok(s)
+    }
+
+    pub fn get_colors(&self) -> (Color, Color, Color) {
+        let bg_color = graphics::Color::from(if self.light_theme {
+            [1.0, 1.0, 1.0, 1.0]
+        } else {
+            [0.1, 0.1, 0.1, 1.0]
+        });
+        let stroke_color = graphics::Color::from(if self.light_theme {
+            [0.1, 0.1, 0.1, 1.0]
+        } else {
+            [0.8, 0.8, 0.8, 1.0]
+        });
+        let text_color = if self.light_theme {
+            graphics::Color::BLACK
+        } else {
+            graphics::Color::WHITE
+        };
+
+        (bg_color, stroke_color, text_color)
     }
 }
 
@@ -256,8 +289,9 @@ impl event::EventHandler<ggez::GameError> for MainState {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
-        let bg_color = graphics::Color::from([0.1, 0.1, 0.1, 1.0]);
+        let (bg_color, stroke_color, text_color) = self.get_colors();
         let head_color = Color::RED;
+
         let mut canvas = graphics::Canvas::from_frame(ctx, bg_color);
 
         let stroke_width = (self.sizing.cell_size / 2.0 * 0.03).ceil().max(1.0);
@@ -278,7 +312,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
                 ],
             ],
             stroke_width,
-            Color::WHITE,
+            stroke_color,
         )?;
         canvas.draw(
             &horiz_line,
@@ -310,7 +344,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
             ctx,
             &[[0.0, 0.0], [0.0, self.sizing.cell_size]],
             stroke_width,
-            Color::WHITE,
+            stroke_color,
         )?;
         for i in 0..=(self.cells_input.value() as usize + 1) {
             canvas.draw(
@@ -366,7 +400,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
                 let mut text_fragment = TextFragment::default();
                 text_fragment.text = text_content;
-                // text_fragment.color = Some(Color::new(1.0, 1.0, 1.0, 0.0));
+                text_fragment.color = Some(text_color);
                 text_fragment.scale(PxScale {
                     x: text_size,
                     y: text_size,
@@ -420,14 +454,14 @@ impl event::EventHandler<ggez::GameError> for MainState {
         canvas.draw(
             &square,
             [
-                0.0,
+                -1.0,
                 self.sizing.window.y / 2.0 - (self.sizing.cell_size + 10.0) / 2.0,
             ],
         );
         canvas.draw(
             &square,
             [
-                self.sizing.window.x - HORIZ_MARGIN,
+                self.sizing.window.x - HORIZ_MARGIN + 1.0,
                 self.sizing.window.y / 2.0 - (self.sizing.cell_size + 10.0) / 2.0,
             ],
         );
@@ -482,7 +516,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
             let text_size = 20.0;
             let text_piece = graphics::Text::new(TextFragment {
                 text: format!("Running: \"{}\"", self.turing_machine.name()),
-                color: None,
+                color: Some(text_color),
                 scale: Some(PxScale {
                     x: text_size,
                     y: text_size,
@@ -500,7 +534,7 @@ impl event::EventHandler<ggez::GameError> for MainState {
                     "Current state: \"{}\"",
                     self.turing_machine.current_state_name()
                 ),
-                color: None,
+                color: Some(text_color),
                 scale: Some(PxScale {
                     x: text_size,
                     y: text_size,
@@ -580,10 +614,12 @@ impl event::EventHandler<ggez::GameError> for MainState {
 
 pub fn main() -> GameResult {
     let args = args().collect::<Vec<_>>();
-    if args.len() != 3 {
+    if args.len() < 3 {
         eprintln!("Usage: ./turing <filename.tng> <tape_data>");
         exit(1);
     }
+
+    let dark_theme = args.len() == 4 && args[3] == "--dark";
 
     let cb = ggez::ContextBuilder::new("Turing Machine Simulator", "keelus");
 
@@ -593,12 +629,12 @@ pub fn main() -> GameResult {
     let (ctx, event_loop) = cb
         .window_mode({
             let mut window_mode = WindowMode::default();
-            window_mode.resizable = true;
+            // window_mode.resizable = true;
             window_mode.width = WINDOW_WIDTH;
             window_mode.height = WINDOW_HEIGHT;
             window_mode
         })
         .build()?;
-    let state = MainState::new(&args[1], &args[2], WINDOW_WIDTH, WINDOW_HEIGHT)?;
+    let state = MainState::new(&args[1], &args[2], WINDOW_WIDTH, WINDOW_HEIGHT, !dark_theme)?;
     event::run(ctx, event_loop, state)
 }

@@ -32,10 +32,11 @@ impl NumberInput {
         min: i16,
         max: i16,
         value_rect: Rect,
+        text_color: Color,
     ) -> Self {
         let label_text = graphics::Text::new(TextFragment {
             text: label_text.to_string(),
-            color: None,
+            color: Some(text_color),
             scale: Some(PxScale { x: 17.0, y: 17.0 }),
             font: None,
         });

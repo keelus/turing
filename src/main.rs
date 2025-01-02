@@ -8,7 +8,8 @@ use ggez::{
 };
 use num_input::NumberInput;
 use std::{
-    env::args,
+    env::{self, args},
+    path,
     process::exit,
     time::{Duration, Instant},
 };
@@ -611,20 +612,32 @@ pub fn main() -> GameResult {
 
     let dark_theme = args.len() == 4 && args[3] == "--dark";
 
-    let cb = ggez::ContextBuilder::new("Turing Machine Simulator", "keelus");
+    let resource_dir = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
+        let mut path = path::PathBuf::from(manifest_dir);
+        path.push("resources");
+        path
+    } else {
+        path::PathBuf::from("./resources")
+    };
+
+    let cb = ggez::ContextBuilder::new("Turing Machine Simulator", "keelus")
+        .add_resource_path(resource_dir);
 
     const WINDOW_WIDTH: f32 = 1000.0;
     const WINDOW_HEIGHT: f32 = 800.0;
 
     let (ctx, event_loop) = cb
-        .window_mode({
-            let mut window_mode = ggez::conf::WindowMode::default().resizable(true);
-            window_mode.width = WINDOW_WIDTH;
-            window_mode.height = WINDOW_HEIGHT;
-            window_mode.min_width = 400.0;
-            window_mode.min_height = 600.0;
-            window_mode
-        })
+        .window_mode(
+            ggez::conf::WindowMode::default()
+                .dimensions(WINDOW_WIDTH, WINDOW_HEIGHT)
+                .min_dimensions(400.0, 600.0)
+                .resizable(true),
+        )
+        .window_setup(
+            ggez::conf::WindowSetup::default()
+                .title("Turing Machine Simulator - by keelus")
+                .icon("/icon.png"),
+        )
         .build()?;
 
     let state = MainState::new(&args[1], &args[2], WINDOW_WIDTH, WINDOW_HEIGHT, !dark_theme);

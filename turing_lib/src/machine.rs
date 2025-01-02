@@ -114,7 +114,12 @@ impl TuringMachine {
         let file_data = fs::read_to_string(filename)
             .map_err(|_| format!("Could not open the file \"{}\"", filename))?;
 
-        let mut machine = parser::parse_file(&file_data, Tape(vec![]))?;
+        let file_lines = file_data
+            .lines()
+            .filter(|l| !l.is_empty())
+            .collect::<Vec<_>>();
+
+        let mut machine = parser::parse_file(&file_lines, Tape(vec![]))?;
         let tape = Tape::parse(tape_data, machine.blank_symbol);
         machine.tape = tape;
 

@@ -4,7 +4,7 @@ use ggez::{
     graphics::{self, Color, Drawable, FillOptions, PxScale, Rect, StrokeOptions, TextFragment},
     input::mouse::{set_cursor_type, CursorIcon},
     mint::Point2,
-    Context, GameResult,
+    Context, GameError, GameResult,
 };
 use num_input::NumberInput;
 use std::{
@@ -102,7 +102,8 @@ impl MainState {
         light_theme: bool,
     ) -> GameResult<MainState> {
         let mut s = MainState {
-            turing_machine: TuringMachine::new_from_file(filename, tape).unwrap(),
+            turing_machine: TuringMachine::new_from_file(filename, tape)
+                .map_err(|err| GameError::CustomError(err))?,
 
             writing_animation: None,
 
@@ -625,6 +626,12 @@ pub fn main() -> GameResult {
             window_mode
         })
         .build()?;
-    let state = MainState::new(&args[1], &args[2], WINDOW_WIDTH, WINDOW_HEIGHT, !dark_theme)?;
-    event::run(ctx, event_loop, state)
+
+    let state = MainState::new(&args[1], &args[2], WINDOW_WIDTH, WINDOW_HEIGHT, !dark_theme);
+    if let Ok(state) = state {
+        event::run(ctx, event_loop, state)
+    } else {
+        eprintln!("Error: \"{}\"", state.err().unwrap());
+        exit(1)
+    }
 }

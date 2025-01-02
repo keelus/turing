@@ -64,7 +64,7 @@ fn parse_config(file_data: &[&str]) -> Result<Config, String> {
                 ["head_start", index] => {
                     config_map.insert("head_start", index.to_string());
                 }
-                _ => println!("Ignoring line \"{line}\""),
+                _ => return Err(format!("[turing_lib] Error while parsing configuration. Unexpected line found: \"{line}\"."))
             },
         }
     }
@@ -203,7 +203,7 @@ fn parse_states(
                                     _ => {
                                         if reading_symbol.len() != 1 {
                                             return Err(format!(
-                                                "[turing_lib] Error while parsing states. Invalid reading symbol found at line \"{line}\""
+                                                "[turing_lib] Error while parsing a state. Invalid reading symbol found at line \"{line}\"."
                                             ));
                                         }
 
@@ -224,7 +224,7 @@ fn parse_states(
                                     _ => {
                                         if writing_symbol.len() != 1 {
                                             return Err(format!(
-                                                "[turing_lib] Error while parsing states. Invalid reading symbol found at line \"{line}\""
+                                                "[turing_lib] Error while parsing a state. Invalid reading symbol found at line \"{line}\"."
                                             ));
                                         }
 
@@ -245,7 +245,7 @@ fn parse_states(
                                 "S" => HeadMovement::Stay,
                                 _ => {
                                     return Err(format!(
-                                        "[turing_lib] Error while parsing states. Unexpected head movement found at line \"{line}\""
+                                        "[turing_lib] Error while parsing a transition. Unexpected head movement found at line \"{line}\"."
                                     ));
                                 }
                             };
@@ -253,16 +253,20 @@ fn parse_states(
                             transition_states.insert(new_state_name);
 
                             if let Some(ref mut cur_state) = current_state {
-                                cur_state.transitions.insert(
-                                    reading_symbol,
-                                    Transition::new(
-                                        head_movement,
-                                        writing_symbol,
-                                        new_state_name.to_string(),
-                                    ),
-                                );
+                                if cur_state.transitions.contains_key(&reading_symbol) {
+                                    return Err(format!("[turing_lib] Error while parsing a state. Non-determinism not allowed. The transition source symbol {:?} has already been defined for the state \"{}\".", reading_symbol, new_state_name));
+                                } else {
+                                    cur_state.transitions.insert(
+                                        reading_symbol,
+                                        Transition::new(
+                                            head_movement,
+                                            writing_symbol,
+                                            new_state_name.to_string(),
+                                        ),
+                                    );
+                                }
                             } else {
-                                return Err("[turing_lib] Error while parsing states. Unexpected transition declaration outside a state."
+                                return Err("[turing_lib] Error while parsing a state. Unexpected transition declaration outside a state."
                                     .to_string());
                             }
                         }

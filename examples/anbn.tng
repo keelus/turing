@@ -10,20 +10,23 @@ states {
 		_,_,S,q4
 		#,#,R,q3
 	}
+
 	state q1 {
 		a,a,R,q1
 		#,#,R,q1
 		b,#,L,q2
 	}
+
 	state q2 {
 		#,#,L,q2
 		a,a,L,q2
 		_,_,R,q0
 	}
+
 	state q3 {
 		#,#,R,q3
 		_,_,S,q4
 	}
-	state q4 is final {
-	}
+
+	state q4 is final {}
 }

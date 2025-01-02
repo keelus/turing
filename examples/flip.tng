@@ -1,0 +1,16 @@
+config {
+    name: "A Turing Machine that flips binary numbers until the end"
+    blank_symbol: '_'
+    head_start: 1
+}
+
+states {
+    state s0 is initial {
+        0,1,R,s0
+        1,0,R,s0
+        _,_,S,s1
+        default,default,R,s0
+    }
+
+    state s1 is final {}
+}

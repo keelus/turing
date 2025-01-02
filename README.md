@@ -1,4 +1,8 @@
-# Turing Machine Simulator and Visualizer
+<p align="center">
+    <img src="https://github.com/user-attachments/assets/ebe8a9d0-0207-4822-9c09-d6ea13204b80" width="125" height="125" />
+</p>
+<h1 align="center">Turing Machine Simulator and Visualizer</h1>
+
 An application to simulate and visualize any one-tape Turing Machine. The application has been written in Rust, and uses a custom Turing library and `ggez` crate for the graphics.
 
 ## App preview
@@ -47,3 +51,4 @@ turing flip.tng 11001
 
 ## License
 Licensed under the [MIT License](LICENSE.md).
+
